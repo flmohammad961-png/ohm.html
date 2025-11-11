@@ -1,0 +1,394 @@
+import React, { useState } from 'react';
+import { Plus, Trash2, Calculator, Zap } from 'lucide-react';
+
+const ResistanceSimulator = () => {
+  const [circuit, setCircuit] = useState([
+    { id: 1, type: 'resistor', value: 100 },
+    { id: 2, type: 'resistor', value: 200 },
+    {
+      id: 3,
+      type: 'parallel',
+      children: [
+        { id: 4, type: 'resistor', value: 150 },
+        { id: 5, type: 'resistor', value: 300 }
+      ]
+    }
+  ]);
+  const [nextId, setNextId] = useState(6);
+  const [showAnimation, setShowAnimation] = useState(false);
+
+  const triggerAnimation = () => {
+    setShowAnimation(true);
+    setTimeout(() => setShowAnimation(false), 600);
+  };
+
+  const addResistor = (path) => {
+    const newCircuit = JSON.parse(JSON.stringify(circuit));
+    
+    if (path.length === 0) {
+      newCircuit.push({ id: nextId, type: 'resistor', value: 100 });
+    } else {
+      let current = newCircuit;
+      for (let i = 0; i < path.length - 1; i++) {
+        if (current[path[i]].children) {
+          current = current[path[i]].children;
+        } else {
+          current = current[path[i]];
+        }
+      }
+      current.splice(path[path.length - 1] + 1, 0, { id: nextId, type: 'resistor', value: 100 });
+    }
+    
+    setCircuit(newCircuit);
+    setNextId(nextId + 1);
+    triggerAnimation();
+  };
+
+  const changeToSeries = (path) => {
+    const newCircuit = JSON.parse(JSON.stringify(circuit));
+    let current = newCircuit;
+    
+    for (let i = 0; i < path.length - 1; i++) {
+      if (current[path[i]].children) {
+        current = current[path[i]].children;
+      } else {
+        current = current[path[i]];
+      }
+    }
+    
+    const element = current[path[path.length - 1]];
+    const oldValue = element.value || 100;
+    element.type = 'series';
+    element.children = [
+      { id: nextId, type: 'resistor', value: oldValue },
+      { id: nextId + 1, type: 'resistor', value: 100 }
+    ];
+    delete element.value;
+    
+    setCircuit(newCircuit);
+    setNextId(nextId + 2);
+    triggerAnimation();
+  };
+
+  const changeToParallel = (path) => {
+    const newCircuit = JSON.parse(JSON.stringify(circuit));
+    let current = newCircuit;
+    
+    for (let i = 0; i < path.length - 1; i++) {
+      if (current[path[i]].children) {
+        current = current[path[i]].children;
+      } else {
+        current = current[path[i]];
+      }
+    }
+    
+    const element = current[path[path.length - 1]];
+    const oldValue = element.value || 100;
+    element.type = 'parallel';
+    element.children = [
+      { id: nextId, type: 'resistor', value: oldValue },
+      { id: nextId + 1, type: 'resistor', value: 100 }
+    ];
+    delete element.value;
+    
+    setCircuit(newCircuit);
+    setNextId(nextId + 2);
+    triggerAnimation();
+  };
+
+  const updateValue = (path, value) => {
+    const newCircuit = JSON.parse(JSON.stringify(circuit));
+    let current = newCircuit;
+    
+    for (let i = 0; i < path.length - 1; i++) {
+      if (current[path[i]].children) {
+        current = current[path[i]].children;
+      } else {
+        current = current[path[i]];
+      }
+    }
+    
+    current[path[path.length - 1]].value = parseFloat(value) || 0;
+    setCircuit(newCircuit);
+  };
+
+  const removeElement = (path) => {
+    const newCircuit = JSON.parse(JSON.stringify(circuit));
+    
+    if (path.length === 1) {
+      newCircuit.splice(path[0], 1);
+    } else {
+      let current = newCircuit;
+      for (let i = 0; i < path.length - 1; i++) {
+        if (current[path[i]].children) {
+          current = current[path[i]].children;
+        } else {
+          current = current[path[i]];
+        }
+      }
+      current.splice(path[path.length - 1], 1);
+    }
+    
+    setCircuit(newCircuit);
+    triggerAnimation();
+  };
+
+  const calcRes = (item) => {
+    if (item.type === 'resistor') return item.value;
+    if (item.type === 'series') {
+      return item.children.reduce((sum, child) => sum + calcRes(child), 0);
+    }
+    if (item.type === 'parallel') {
+      const sum = item.children.reduce((s, child) => {
+        const r = calcRes(child);
+        return s + (r > 0 ? 1 / r : 0);
+      }, 0);
+      return sum > 0 ? 1 / sum : 0;
+    }
+    return 0;
+  };
+
+  const calculateResistance = () => {
+    return circuit.reduce((total, item) => total + calcRes(item), 0);
+  };
+
+  const renderCircuitTree = (items, basePath = []) => {
+    return items.map((item, idx) => {
+      const currentPath = [...basePath, idx];
+      
+      if (item.type === 'resistor') {
+        return (
+          <div key={item.id} className="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-3 my-2">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-purple-600">R{item.id}:</span>
+              <input
+                type="number"
+                value={item.value}
+                onChange={(e) => updateValue(currentPath, e.target.value)}
+                className="w-20 px-2 py-1 border-2 border-gray-300 rounded focus:border-blue-500 focus:outline-none"
+                min="0"
+              />
+              <span className="font-semibold">Ω</span>
+              <button
+                onClick={() => removeElement(currentPath)}
+                className="ml-auto bg-red-500 hover:bg-red-600 text-white p-1 rounded transition-all"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+            <div className="flex gap-1 mt-2">
+              <button
+                onClick={() => addResistor(currentPath)}
+                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-bold py-1 px-2 rounded transition-all"
+              >
+                + بعد
+              </button>
+              <button
+                onClick={() => changeToSeries(currentPath)}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-2 rounded transition-all"
+              >
+                سری
+              </button>
+              <button
+                onClick={() => changeToParallel(currentPath)}
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-2 rounded transition-all"
+              >
+                موازی
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      const isParallel = item.type === 'parallel';
+      const bgColor = isParallel ? 'bg-green-50' : 'bg-blue-50';
+      const borderColor = isParallel ? 'border-green-400' : 'border-blue-400';
+      const title = isParallel ? 'موازی 🔀' : 'سری ➡️';
+
+      return (
+        <div key={item.id} className={`${bgColor} border-2 ${borderColor} rounded-lg p-4 my-2`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-bold text-gray-800">{title}</div>
+            <button
+              onClick={() => removeElement(currentPath)}
+              className="bg-red-500 hover:bg-red-600 text-white p-1 rounded transition-all"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+          {item.children && renderCircuitTree(item.children, currentPath)}
+        </div>
+      );
+    });
+  };
+
+  const renderDiagram = (items, startX, y) => {
+    const elements = [];
+    let x = startX;
+
+    items.forEach(item => {
+      if (item.type === 'resistor') {
+        elements.push(
+          <g key={`r-${item.id}`}>
+            <line x1={x} y1={y} x2={x + 20} y2={y} stroke="#333" strokeWidth="3"/>
+            <rect x={x + 20} y={y - 15} width="40" height="30" fill="#fbbf24" stroke="#333" strokeWidth="2" rx="3"/>
+            <text x={x + 40} y={y + 5} fontSize="12" fill="#000" textAnchor="middle" fontWeight="bold">R{item.id}</text>
+            <text x={x + 40} y={y + 40} fontSize="10" fill="#7c3aed" textAnchor="middle" fontWeight="bold">{item.value}Ω</text>
+            <line x1={x + 60} y1={y} x2={x + 80} y2={y} stroke="#333" strokeWidth="3"/>
+          </g>
+        );
+        x += 80;
+      } else if (item.type === 'series') {
+        const result = renderDiagram(item.children, x, y);
+        elements.push(...result.elements);
+        x = result.endX;
+      } else if (item.type === 'parallel') {
+        const branches = item.children.length;
+        const spacing = 70;
+        const sx = x;
+        
+        elements.push(<circle key={`ps-${item.id}`} cx={x} cy={y} r="4" fill="#333"/>);
+        
+        let maxX = x;
+        item.children.forEach((child, i) => {
+          const by = y + (i - (branches - 1) / 2) * spacing;
+          elements.push(<line key={`pl1-${item.id}-${i}`} x1={sx} y1={y} x2={sx + 30} y2={by} stroke="#333" strokeWidth="3"/>);
+          
+          const result = renderDiagram([child], sx + 30, by);
+          elements.push(...result.elements);
+          
+          elements.push(<line key={`pl2-${item.id}-${i}`} x1={result.endX} y1={by} x2={result.endX + 30} y2={y} stroke="#333" strokeWidth="3"/>);
+          
+          if (result.endX + 30 > maxX) maxX = result.endX + 30;
+        });
+        
+        elements.push(<circle key={`pe-${item.id}`} cx={maxX} cy={y} r="4" fill="#333"/>);
+        x = maxX;
+      }
+    });
+
+    return { elements, endX: x };
+  };
+
+  const { elements: diagramElements, endX } = renderDiagram(circuit, 150, 250);
+  const totalResistance = calculateResistance();
+  const isEmpty = circuit.length === 0;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-8 text-white">
+          <h1 className="text-4xl font-bold mb-2 flex items-center justify-center gap-3">
+            <Zap className="text-yellow-400" size={40} />
+            شبیه‌ساز مدار مقاومت‌های سری و موازی
+          </h1>
+          <p className="text-xl text-blue-200 mb-4">طراحی و محاسبه مقاومت معادل</p>
+          <div className="bg-blue-800 bg-opacity-50 backdrop-blur-sm rounded-lg p-4 inline-block">
+            <p className="text-lg font-semibold text-yellow-300">طراح و سازنده: محمد فلاح لاله‌زاری</p>
+            <p className="text-md text-blue-200">کارشناس ارشد فیزیک - راور کرمان</p>
+          </div>
+        </div>
+
+        {!isEmpty && (
+          <div className="bg-white rounded-xl shadow-2xl p-6 mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">نمای مدار الکتریکی</h2>
+            <div className={`bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-8 border-4 border-blue-500 overflow-x-auto ${showAnimation ? 'animate-pulse' : ''}`}>
+              <svg viewBox={`0 0 ${Math.max(800, endX + 200)} 600`} className="w-full h-auto">
+                <line x1="50" y1="250" x2="100" y2="250" stroke="#333" strokeWidth="3"/>
+                <line x1="100" y1="230" x2="100" y2="270" stroke="#333" strokeWidth="4"/>
+                <line x1="110" y1="240" x2="110" y2="260" stroke="#333" strokeWidth="6"/>
+                <text x="75" y="220" fontSize="14" fill="#d97706" fontWeight="bold">+</text>
+                <text x="75" y="290" fontSize="14" fill="#2563eb" fontWeight="bold">-</text>
+                <line x1="110" y1="250" x2="150" y2="250" stroke="#333" strokeWidth="3"/>
+
+                {diagramElements}
+
+                <line x1={endX} y1="250" x2={endX + 50} y2="250" stroke="#333" strokeWidth="3"/>
+                <line x1={endX + 50} y1="250" x2={endX + 50} y2="350" stroke="#333" strokeWidth="3"/>
+                <line x1={endX + 50} y1="350" x2="50" y2="350" stroke="#333" strokeWidth="3"/>
+                <line x1="50" y1="350" x2="50" y2="250" stroke="#333" strokeWidth="3"/>
+
+                <defs>
+                  <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
+                  </marker>
+                </defs>
+                <line x1="120" y1="220" x2="160" y2="220" stroke="#ef4444" strokeWidth="2" markerEnd="url(#arrowhead)"/>
+                <text x="140" y="210" fontSize="12" fill="#ef4444" fontWeight="bold" textAnchor="middle">I</text>
+              </svg>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="bg-white rounded-xl shadow-2xl p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">ساختار مدار</h2>
+            
+            {isEmpty ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500 mb-6 text-lg">مدار خالی است!</p>
+                <button
+                  onClick={() => addResistor([])}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-4 px-8 rounded-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 mx-auto"
+                >
+                  <Plus size={24} />
+                  افزودن مقاومت اول
+                </button>
+              </div>
+            ) : (
+              <div className="max-h-[500px] overflow-y-auto">
+                {renderCircuitTree(circuit)}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-2xl p-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <Calculator className="text-blue-600" size={28} />
+                نتایج محاسبات
+              </h2>
+              
+              <div className="bg-gradient-to-br from-purple-100 to-purple-200 p-8 rounded-lg border-4 border-purple-400 text-center">
+                <h3 className="text-2xl font-bold text-gray-800 mb-3">مقاومت معادل کل</h3>
+                <p className="text-5xl font-bold text-purple-700">{totalResistance.toFixed(2)} Ω</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-2xl p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">فرمول‌های محاسبه</h3>
+              
+              <div className="space-y-4">
+                <div className="bg-yellow-50 p-4 rounded-lg border-2 border-yellow-300">
+                  <h4 className="font-bold text-yellow-700 mb-2">مقاومت‌های سری</h4>
+                  <p className="text-lg font-mono bg-white p-3 rounded">
+                    R = R₁ + R₂ + R₃ + ...
+                  </p>
+                </div>
+
+                <div className="bg-green-50 p-4 rounded-lg border-2 border-green-300">
+                  <h4 className="font-bold text-green-700 mb-2">مقاومت‌های موازی</h4>
+                  <p className="text-lg font-mono bg-white p-3 rounded">
+                    1/R = 1/R₁ + 1/R₂ + 1/R₃ + ...
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-2xl p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">راهنما</h3>
+              <ul className="space-y-2 text-gray-700 text-sm">
+                <li>• "+ بعد": مقاومت جدید بعد از این اضافه می‌شود</li>
+                <li>• "سری": تبدیل به گروه سری با 2 مقاومت</li>
+                <li>• "موازی": تبدیل به گروه موازی با 2 مقاومت</li>
+                <li>• برای حذف روی سطل زباله کلیک کنید</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ResistanceSimulator;
